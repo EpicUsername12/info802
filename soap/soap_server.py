@@ -1,6 +1,7 @@
 # Serveur SOAP pour le calcul de trajet en voiture électrique
 # Auteur: Chettibi Tarik
 
+# pip install lxml
 # pip install spyne
 # pip install openrouteservice
 import openrouteservice
@@ -50,16 +51,40 @@ class ServiceTempsTrajet(ServiceBase):
         # On ajoute le temps de recharge
         temps_total = temps_trajet + temps_recharge_total / 60
 
-        yield temps_total
+        return temps_total
 
 
 application = Application([ServiceTempsTrajet], 'info802.tp.soap.trajet',
                           in_protocol=Soap11(validator='lxml'),
                           out_protocol=Soap11())
 
+
+class SimpleCorsMiddleware(object):
+    def __init__(self, app):
+        self.app = app
+
+    def __call__(self, environ, start_response):
+        def cors_start_response(status, response_headers, exc_info=None):
+            cors_headers = [('Access-Control-Allow-Origin', '*'),
+                            ('Access-Control-Allow-Methods', 'POST, GET, OPTIONS'),
+                            ('Access-Control-Allow-Headers', 'SOAPAction, Content-Type')]
+            response_headers.extend(cors_headers)
+            return start_response(status, response_headers, exc_info)
+
+        if environ.get('REQUEST_METHOD') == 'OPTIONS':
+            cors_start_response('200 OK', [('Content-Type', 'text/plain')])
+            return []
+
+        return self.app(environ, cors_start_response)
+
+
 if __name__ == '__main__':
     from wsgiref.simple_server import make_server
     wsgi_application = WsgiApplication(application)
+    wsgi_application = SimpleCorsMiddleware(wsgi_application)
+
+    server = make_server('0.0.0.0', 22220, wsgi_application)
+    server.serve_forever()
 
     server = make_server('0.0.0.0', 22220, wsgi_application)
     server.serve_forever()
