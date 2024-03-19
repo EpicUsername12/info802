@@ -1,5 +1,6 @@
 "use client";
 
+import SOAP_URL from "@/utils/SOAP_URL";
 import { Autocomplete, useJsApiLoader, GoogleMap, Libraries, DirectionsRenderer, Marker } from "@react-google-maps/api";
 import { Button, Spinner, TextInput } from "flowbite-react";
 import { useEffect, useRef, useState } from "react";
@@ -155,7 +156,7 @@ export const MapComponent: React.FC<MapProps> = ({ autonomie, temps_recharge }) 
         autonomie: number,
         temps_recharge: number,
     ): Promise<TrajetContent | null> {
-        const url = "http://localhost:22220"; // Replace with your SOAP server URL
+        const url = SOAP_URL; // Replace with your SOAP server URL
         const soapBody = `
             <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:inf="info802.tp.soap.trajet">
                <soapenv:Header/>
