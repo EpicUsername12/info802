@@ -43,6 +43,17 @@ export const MapComponent: React.FC<MapProps> = ({ autonomie, temps_recharge }) 
         libraries: GOOGLE_MAPS_LIBRARIES,
     });
 
+    async function geocodeAddress(address: string): Promise<google.maps.LatLng | null> {
+        const geocoder = new google.maps.Geocoder();
+        const results = await geocoder.geocode({ address: address });
+
+        if (results && results.results.length > 0) {
+            return results.results[0].geometry.location;
+        }
+
+        return null;
+    }
+
     useEffect(() => {
         if (!originAutocomplete || !destinationAutocomplete) return;
 
@@ -172,8 +183,6 @@ export const MapComponent: React.FC<MapProps> = ({ autonomie, temps_recharge }) 
 
             const responseText = await response.text();
 
-            console.log(responseText);
-
             const tempsTrajetStr = getXmlValue(responseText, "tns:TotalTemps");
             const bornesStr = getXmlValue(responseText, "tns:BornesRecharge");
 
@@ -181,13 +190,8 @@ export const MapComponent: React.FC<MapProps> = ({ autonomie, temps_recharge }) 
                 const tempsTrajet = parseFloat(tempsTrajetStr);
                 const bornes = readArrayFloatArray(bornesStr);
 
-                console.log("Temps trajet:", tempsTrajet);
-                console.log("Bornes:", bornes);
-
                 const content: TrajetContent = { temps_trajet: tempsTrajet, bornes };
                 setTrajetContenu(content);
-
-                console.log(content);
 
                 return content;
             }
@@ -203,22 +207,32 @@ export const MapComponent: React.FC<MapProps> = ({ autonomie, temps_recharge }) 
 
         setRequestOngoing(true);
 
+        const start = await geocodeAddress(origin);
+        const end = await geocodeAddress(destination);
+
+        console.log(origin, start);
+        console.log(destination, end);
+
+        if (!start || !end) return;
+
+        const content = await CalculTempsTrajet(start.lat(), start.lng(), end.lat(), end.lng(), autonomie, temps_recharge);
+        if (!content) return;
+
+        const waypoints: google.maps.DirectionsWaypoint[] = content.bornes.map((borne) => {
+            return { location: new google.maps.LatLng(borne[1], borne[0]) };
+        });
+
         const service = new google.maps.DirectionsService();
         const request: google.maps.DirectionsRequest = {
-            origin: origin,
-            destination: destination,
+            origin: start,
+            destination: end,
             travelMode: google.maps.TravelMode.DRIVING,
+            waypoints,
+            optimizeWaypoints: true,
         };
-
-        console.log(request);
 
         const results = await service.route(request);
         setDirectionResult(results);
-
-        const start: google.maps.LatLng = results.routes[0].legs[0].start_location;
-        const end: google.maps.LatLng = results.routes[0].legs[0].end_location;
-
-        CalculTempsTrajet(start.lat(), start.lng(), end.lat(), end.lng(), autonomie, temps_recharge);
 
         setRequestOngoing(false);
     }
@@ -237,8 +251,42 @@ export const MapComponent: React.FC<MapProps> = ({ autonomie, temps_recharge }) 
         return location;
     }
 
+    function getDirectionResultDistance(): number {
+        if (!directionResult) return NaN;
+
+        let distance = 0;
+        for (const route of directionResult.routes) {
+            for (const leg of route.legs) {
+                distance += leg.distance?.value || 0;
+            }
+        }
+
+        return distance;
+    }
+
+    function getTotalTrajetTime(): string {
+        if (!trajetContenu) return "";
+
+        let time = trajetContenu.temps_trajet;
+        let ret_str = "";
+
+        if (time > 24) {
+            ret_str += Math.floor(time / 24) + "j";
+            time = time % 24;
+        }
+
+        if (time > 0) {
+            ret_str += Math.floor(time) + "h";
+        }
+
+        // Number of minutes
+        ret_str += Math.floor((time % 1) * 60) + "min";
+
+        return ret_str;
+    }
+
     return (
-        <div style={{ height: "80vh", width: "60vw" }} className="mx-auto p-24">
+        <div style={{ height: "60vh", width: "60vw" }} className="mx-auto">
             <form className="flex max-w-md flex-col gap-4 mx-auto">
                 <div>
                     <h1 className="text-xl text-center">
@@ -247,6 +295,16 @@ export const MapComponent: React.FC<MapProps> = ({ autonomie, temps_recharge }) 
                     <h1 className="text-xl text-center">
                         Temps de recharge: <strong>~{temps_recharge}min</strong>
                     </h1>
+                    {trajetContenu && directionResult && (
+                        <>
+                            <h1 className="text-xl text-center">
+                                Distance totale: <strong>{getDirectionResultDistance() / 1000} km</strong>
+                            </h1>
+                            <h1 className="text-xl text-center">
+                                Temps de trajet: <strong>{getTotalTrajetTime()}</strong>
+                            </h1>
+                        </>
+                    )}
                 </div>
                 <Autocomplete onLoad={(autocomplete) => setOriginAutoComplete(autocomplete)}>
                     <TextInput

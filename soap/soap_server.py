@@ -14,6 +14,7 @@ openrouteservice_token = "5b3ce3597851110001cf624884cf30f4883c492d828cc99ae2d29b
 
 # Example: http://spyne.io/#inprot=Soap11&outprot=Soap11&s=rpc&tpt=WsgiApplication&validator=true
 
+
 def calcul_distance(start: tuple[float, float], end: tuple[float, float]):
     # Convert degrees to radians
     start_lon, start_lat = math.radians(start[0]), math.radians(start[1])
@@ -27,7 +28,8 @@ def calcul_distance(start: tuple[float, float], end: tuple[float, float]):
     delta_lat = end_lat - start_lat
     a = math.sin(delta_lat / 2) ** 2 + math.cos(start_lat) * math.cos(end_lat) * math.sin(delta_lon / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return radius * c * 1000 # En mètres
+    return radius * c * 1000  # En mètres
+
 
 def get_bornes(pos: tuple[float, float], distance: float, limit: int = 5):
     url = "https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets/bornes-irve/records"
@@ -40,6 +42,7 @@ def get_bornes(pos: tuple[float, float], distance: float, limit: int = 5):
     res = response.json()
     return res["results"]
 
+
 def get_routes(start: tuple[float, float], end: tuple[float, float]):
     url = "https://api.openrouteservice.org/v2/directions/driving-car"
     query = {
@@ -51,8 +54,10 @@ def get_routes(start: tuple[float, float], end: tuple[float, float]):
     response = requests.get(url, params=query)
     return response.json()
 
+
 DISTANCE_LOOKUP_BORNE = 10
 VITESSE_MOYENNE = 60
+
 
 class ServiceTempsTrajet(ServiceBase):
     # Distance en mètre
@@ -66,7 +71,7 @@ class ServiceTempsTrajet(ServiceBase):
                     end_lat: Float,
                     autonomie: Float,
                     temps_recharge: tuple[Float, Array]):
-        
+
         routes = get_routes((start_long, start_lat), (end_long, end_lat))
 
         feature = routes["features"][0]
@@ -78,40 +83,36 @@ class ServiceTempsTrajet(ServiceBase):
 
         steps = feature["geometry"]["coordinates"]
 
-        cumul_distance = 0
         distance_parcourue = 0
-        bornes =  []
+        bornes = []
         temps_total = 0
 
-        for i in range(0, len(steps)-1):
-            
+        for i in range(0, len(steps) - 1):
+
             step = steps[i]
-            next_step = steps[i+1]
+            next_step = steps[i + 1]
 
             distance = calcul_distance((step[0], step[1]), (next_step[0], next_step[1]))
-
             distance_parcourue += distance
-            cumul_distance += distance
-            
+
             if distance_parcourue > autonomie:
                 print("Doit recharger: ", distance_parcourue, autonomie)
                 borne = None
                 max_dist = DISTANCE_LOOKUP_BORNE
                 while borne is None or max_dist > 30:
-                    bornes = get_bornes((step[0], step[1]), max_dist)
-                    if len(bornes) == 0:
+                    current_bornes = get_bornes((step[0], step[1]), max_dist, 1)
+                    if len(current_bornes) == 0:
                         max_dist += 5
                     else:
-                        borne = bornes[0]
+                        borne = current_bornes[0]
                         break
 
+                if borne is None:
+                    raise Exception("Pas de borne de recharge à proximité")
+
                 temps_total += temps_recharge
-                if borne is not None:
-                    bornes.append(borne)
-
-                    distance_parcourue = 0
-
-                    print("Borne: ", borne)
+                bornes.append(borne)
+                distance_parcourue = 0
 
             temps_total += distance / 1000 / VITESSE_MOYENNE * 60
 
@@ -148,9 +149,6 @@ if __name__ == '__main__':
     from wsgiref.simple_server import make_server
     wsgi_application = WsgiApplication(application)
     wsgi_application = SimpleCorsMiddleware(wsgi_application)
-
-    server = make_server('0.0.0.0', 22220, wsgi_application)
-    server.serve_forever()
 
     server = make_server('0.0.0.0', 22220, wsgi_application)
     server.serve_forever()
