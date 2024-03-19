@@ -8,9 +8,10 @@ import { Vehicle, VehicleFormat } from "./Vehicle";
 export interface VehicleListProps {
     selectedVehicle?: VehicleFormat;
     onSelection: (vehicle: VehicleFormat) => void;
+    searchFilter?: string;
 }
 
-export const VehicleList: React.FC<VehicleListProps> = ({ selectedVehicle, onSelection }) => {
+export const VehicleList: React.FC<VehicleListProps> = ({ selectedVehicle, onSelection, searchFilter }) => {
     const VEHICLE_LIST_QUERY = gql`
         query vehicleList($page: Int, $size: Int, $search: String) {
             vehicleList(page: $page, size: $size, search: $search) {
@@ -29,11 +30,22 @@ export const VehicleList: React.FC<VehicleListProps> = ({ selectedVehicle, onSel
         }
     `;
 
-    const { loading, error, data } = useQuery(VEHICLE_LIST_QUERY, { variables: { page: 0, size: 15 } });
+    const vars = { page: 0, size: 15, search: searchFilter };
+    const { loading, error, data } = useQuery(VEHICLE_LIST_QUERY, { variables: vars });
 
     return (
-        <div>
-            {loading && <Spinner />}
+        <div style={{ minHeight: "50vh" }}>
+            {loading && (
+                <div className="flex flex-row flex-wrap gap-4 justify-center">
+                    {[...Array(15)].map((_, i) => (
+                        <Card key={i} className="w-48 h-48">
+                            <div className="flex flex-col items-center justify-center h-full">
+                                <Spinner />
+                            </div>
+                        </Card>
+                    ))}
+                </div>
+            )}
             {error && (
                 <Alert color="failure" icon={HiInformationCircle}>
                     <span className="font-medium">Query alert!</span> Error while submitting the query.

@@ -4,7 +4,7 @@ import { ApolloProvider } from "@apollo/client";
 import ChargeTripClient from "@/utils/ChargeTripClient";
 import { VehicleList } from "@/components/VehicleList";
 import { useEffect, useState } from "react";
-import { Button, Progress } from "flowbite-react";
+import { Button, Progress, TextInput } from "flowbite-react";
 import { VehicleFormat } from "@/components/Vehicle";
 import { VehicleDetails, VehicleDetailsGQL } from "@/components/VehicleDetails";
 import { MapComponent } from "@/components/MapComponent";
@@ -15,6 +15,7 @@ export default function Home() {
     const [currentPercentage, setCurrentPercentage] = useState<number>(0);
     const [currentVehicle, setCurrentVehicle] = useState<VehicleFormat | undefined>(undefined);
     const [currentVehicleDetails, setCurrentVehicleDetails] = useState<VehicleDetailsGQL | undefined>(undefined);
+    const [searchFilter, setSearchFilter] = useState<string>("");
 
     const vehicleRange =
         (currentVehicleDetails &&
@@ -65,6 +66,16 @@ export default function Home() {
                         )}
                         {currentStep === 3 && <h1 className="text-4xl text-center font-bold">Veuillez choisir un itinéraire</h1>}
                     </div>
+                    <div>
+                        {currentStep <= 1 && (
+                            <TextInput
+                                value={searchFilter}
+                                onChange={(event) => setSearchFilter(event.target.value)}
+                                className="w-1/2 mx-auto text-center"
+                                placeholder="Chercher un modèle"
+                            />
+                        )}
+                    </div>
                     <div className="py-4">
                         {currentStep <= 1 && (
                             <VehicleList
@@ -73,6 +84,7 @@ export default function Home() {
                                     toStep(1);
                                     setCurrentVehicle(vehicle);
                                 }}
+                                searchFilter={searchFilter}
                             />
                         )}
                         {currentStep === 2 && currentVehicle && (

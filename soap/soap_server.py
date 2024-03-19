@@ -32,6 +32,9 @@ def calcul_distance(start: tuple[float, float], end: tuple[float, float]):
 
 
 def get_bornes(pos: tuple[float, float], distance: float, limit: int = 5):
+
+    print("get_bornes()")
+
     url = "https://odre.opendatasoft.com/api/explore/v2.1/catalog/datasets/bornes-irve/records"
     query = {
         "limit": limit,
@@ -99,10 +102,10 @@ class ServiceTempsTrajet(ServiceBase):
                 print("Doit recharger: ", distance_parcourue, autonomie)
                 borne = None
                 max_dist = DISTANCE_LOOKUP_BORNE
-                while borne is None or max_dist > 30:
+                while borne is None or max_dist > 50:
                     current_bornes = get_bornes((step[0], step[1]), max_dist, 1)
                     if len(current_bornes) == 0:
-                        max_dist += 5
+                        max_dist += 10
                     else:
                         borne = current_bornes[0]
                         break
