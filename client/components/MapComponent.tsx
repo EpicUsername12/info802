@@ -1,16 +1,24 @@
 "use client";
 
-import { Autocomplete, useJsApiLoader, GoogleMap, Libraries, DirectionsRenderer } from "@react-google-maps/api";
+import { Autocomplete, useJsApiLoader, GoogleMap, Libraries, DirectionsRenderer, Marker } from "@react-google-maps/api";
 import { Button, Spinner, TextInput } from "flowbite-react";
 import { useEffect, useRef, useState } from "react";
 
-export interface MapProps {}
+interface TrajetContent {
+    temps_trajet: number;
+    bornes: [number, number][];
+}
+
+export interface MapProps {
+    autonomie: number; // En mètres
+    temps_recharge: number; // En minutes
+}
 
 const GOOGLE_MAPS_API_KEY = "AIzaSyAwpZBPoJW6OqEl4VAtWItVN9icovVuqnw";
 const GOOGLE_MAPS_MAP_ID = "1e9362f45a876eb9";
 const GOOGLE_MAPS_LIBRARIES: Libraries = ["places", "routes"];
 
-export const MapComponent: React.FC<MapProps> = ({}) => {
+export const MapComponent: React.FC<MapProps> = ({ autonomie, temps_recharge }) => {
     const centre = { lat: 45.644240631930096, lng: 5.87350120501348 }; // Université Savoie Mont Blanc (Campus Bourget-du-Lac)
 
     const [originAutocomplete, setOriginAutoComplete] = useState<google.maps.places.Autocomplete>();
@@ -25,6 +33,9 @@ export const MapComponent: React.FC<MapProps> = ({}) => {
     const [directionResult, setDirectionResult] = useState<google.maps.DirectionsResult | null>(null);
 
     const [map, setMap] = useState<google.maps.Map | null>(null);
+
+    const [requestOngoing, setRequestOngoing] = useState<boolean>(false);
+    const [trajetContenu, setTrajetContenu] = useState<TrajetContent | null>(null);
 
     const { isLoaded } = useJsApiLoader({
         googleMapsApiKey: GOOGLE_MAPS_API_KEY,
@@ -61,6 +72,70 @@ export const MapComponent: React.FC<MapProps> = ({}) => {
         return <Spinner />;
     }
 
+    /* 
+        <tns:floatArray>
+            <tns:float>2.721676</tns:float>
+            <tns:float>48.264407</tns:float>
+        </tns:floatArray>
+        <tns:floatArray>
+            <tns:float>2.720788</tns:float>
+            <tns:float>48.263874</tns:float>
+        </tns:floatArray>
+        <tns:floatArray>
+            <tns:float>2.721676</tns:float>
+            <tns:float>48.264407</tns:float>
+        </tns:floatArray>
+    */
+    function readArrayFloatArray(data: string): [number, number][] {
+        const res: [number, number][] = [];
+        const count = countXmlValue(data, "tns:floatArray");
+        let substr = data.substring(0);
+        for (let i = 0; i < count; i++) {
+            let floatArray = getXmlValue(substr, "tns:floatArray");
+            if (floatArray) {
+                const origLength = floatArray.length;
+                const lonStr = getXmlValue(floatArray, "tns:float");
+                const latStr = getXmlValue(floatArray.substring(floatArray.indexOf("</tns:float>") + 12), "tns:float");
+                if (lonStr && latStr) {
+                    res.push([parseFloat(lonStr), parseFloat(latStr)]);
+                }
+                substr = substr.substring(origLength);
+            }
+        }
+
+        return res;
+    }
+
+    function getXmlValue(data: string, nodeName: string): string | null {
+        const length = nodeName.length + 2;
+        const start = data.indexOf(`<${nodeName}>`) + length;
+        if (start < length) {
+            return null;
+        }
+
+        const end = data.indexOf(`</${nodeName}>`, start);
+
+        return data.substring(start, end);
+    }
+
+    function countXmlValue(data: string, nodeName: string): number {
+        const length = nodeName.length + 2;
+        let count = 0;
+        let index = 0;
+
+        while (true) {
+            index = data.indexOf(`<${nodeName}>`, index);
+            if (index === -1) {
+                break;
+            }
+
+            count++;
+            index += length;
+        }
+
+        return count;
+    }
+
     async function CalculTempsTrajet(
         start_lat: number,
         start_long: number,
@@ -68,7 +143,7 @@ export const MapComponent: React.FC<MapProps> = ({}) => {
         end_long: number,
         autonomie: number,
         temps_recharge: number,
-    ) {
+    ): Promise<TrajetContent | null> {
         const url = "http://localhost:22220"; // Replace with your SOAP server URL
         const soapBody = `
             <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:inf="info802.tp.soap.trajet">
@@ -99,18 +174,34 @@ export const MapComponent: React.FC<MapProps> = ({}) => {
 
             console.log(responseText);
 
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(responseText, "text/xml");
-            const result = xmlDoc.getElementsByTagName("return")[0].childNodes[0].nodeValue;
+            const tempsTrajetStr = getXmlValue(responseText, "tns:TotalTemps");
+            const bornesStr = getXmlValue(responseText, "tns:BornesRecharge");
 
-            return result;
-        } catch (error) {}
+            if (bornesStr && tempsTrajetStr) {
+                const tempsTrajet = parseFloat(tempsTrajetStr);
+                const bornes = readArrayFloatArray(bornesStr);
+
+                console.log("Temps trajet:", tempsTrajet);
+                console.log("Bornes:", bornes);
+
+                const content: TrajetContent = { temps_trajet: tempsTrajet, bornes };
+                setTrajetContenu(content);
+
+                console.log(content);
+
+                return content;
+            }
+        } catch (error) {
+            console.error(error);
+        }
 
         return null;
     }
 
     async function updateDirection() {
         if (origin === "" || destination === "") return;
+
+        setRequestOngoing(true);
 
         const service = new google.maps.DirectionsService();
         const request: google.maps.DirectionsRequest = {
@@ -127,7 +218,9 @@ export const MapComponent: React.FC<MapProps> = ({}) => {
         const start: google.maps.LatLng = results.routes[0].legs[0].start_location;
         const end: google.maps.LatLng = results.routes[0].legs[0].end_location;
 
-        CalculTempsTrajet(start.lat(), start.lng(), end.lat(), end.lng(), 250000, 30);
+        CalculTempsTrajet(start.lat(), start.lng(), end.lat(), end.lng(), autonomie, temps_recharge);
+
+        setRequestOngoing(false);
     }
 
     async function panToAddress(address: string) {
@@ -145,8 +238,16 @@ export const MapComponent: React.FC<MapProps> = ({}) => {
     }
 
     return (
-        <div style={{ height: "60vh", width: "60vw" }} className="mx-auto p-24">
+        <div style={{ height: "80vh", width: "60vw" }} className="mx-auto p-24">
             <form className="flex max-w-md flex-col gap-4 mx-auto">
+                <div>
+                    <h1 className="text-xl text-center">
+                        Autonomie: <strong>{autonomie / 1000}km</strong>
+                    </h1>
+                    <h1 className="text-xl text-center">
+                        Temps de recharge: <strong>~{temps_recharge}min</strong>
+                    </h1>
+                </div>
                 <Autocomplete onLoad={(autocomplete) => setOriginAutoComplete(autocomplete)}>
                     <TextInput
                         id="dest1"
@@ -192,10 +293,15 @@ export const MapComponent: React.FC<MapProps> = ({}) => {
                         }}
                         className="w-1/2 mx-auto my-4"
                         color="green"
+                        disabled={requestOngoing}
                     >
                         Calculer itinéraire
                     </Button>
                     {directionResult && <DirectionsRenderer directions={directionResult} />}
+                    {trajetContenu &&
+                        trajetContenu.bornes.map((borne, idx) => {
+                            return <Marker key={idx} position={new google.maps.LatLng(borne[1], borne[0])} />;
+                        })}
                 </GoogleMap>
             </div>
         </div>

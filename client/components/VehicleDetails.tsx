@@ -3,14 +3,60 @@
 import { gql, useQuery } from "@apollo/client";
 import { VehicleFormat } from "./Vehicle";
 import { HiInformationCircle } from "react-icons/hi";
-import { Alert, Card, Spinner, Table } from "flowbite-react";
+import { Alert, Button, Card, Spinner, Table } from "flowbite-react";
 import Image from "next/image";
 
 export interface VehicleDetailsProps {
     vehicle: VehicleFormat;
+    onFetched: (vehicle: VehicleDetailsGQL) => void;
 }
 
-export const VehicleDetails: React.FC<VehicleDetailsProps> = ({ vehicle }) => {
+export interface VehicleDetailsGQL {
+    naming: {
+        make: string;
+        model: string;
+        chargetrip_version: string;
+    };
+    media: {
+        image: {
+            url: string;
+        };
+        brand: {
+            thumbnail_url: string;
+        };
+    };
+    battery: {
+        usable_kwh: number;
+    };
+    range: {
+        best: {
+            highway: number;
+            city: number;
+            combined: number;
+        };
+        worst: {
+            highway: number;
+            city: number;
+            combined: number;
+        };
+        chargetrip_range: {
+            best: number;
+            worst: number;
+        };
+    };
+    routing: {
+        fast_charging_support: boolean;
+    };
+    connectors: {
+        standard: string;
+    };
+    performance: {
+        acceleration: number;
+        top_speed: number;
+    };
+}
+
+export const VehicleDetails: React.FC<VehicleDetailsProps> = ({ vehicle, onFetched }) => {
     const VEHICLE_DETAILS_QUERY = gql`
         query vehicle($vehicleId: ID!) {
             vehicle(id: $vehicleId) {
@@ -129,6 +175,9 @@ export const VehicleDetails: React.FC<VehicleDetailsProps> = ({ vehicle }) => {
                                 </Table.Row>
                             </Table.Body>
                         </Table>
+                        <Button onClick={() => onFetched(data.vehicle)} className="w-1/2 mx-auto my-1" color="green">
+                            Continuer
+                        </Button>
                     </Card>
                 </div>
             )}

@@ -6,7 +6,7 @@ import { VehicleList } from "@/components/VehicleList";
 import { useEffect, useState } from "react";
 import { Button, Progress } from "flowbite-react";
 import { VehicleFormat } from "@/components/Vehicle";
-import { VehicleDetails } from "@/components/VehicleDetails";
+import { VehicleDetails, VehicleDetailsGQL } from "@/components/VehicleDetails";
 import { MapComponent } from "@/components/MapComponent";
 
 export default function Home() {
@@ -14,6 +14,12 @@ export default function Home() {
     const [currentStep, setCurrentStep] = useState<number>(0);
     const [currentPercentage, setCurrentPercentage] = useState<number>(0);
     const [currentVehicle, setCurrentVehicle] = useState<VehicleFormat | undefined>(undefined);
+    const [currentVehicleDetails, setCurrentVehicleDetails] = useState<VehicleDetailsGQL | undefined>(undefined);
+
+    const vehicleRange =
+        (currentVehicleDetails &&
+            ((currentVehicleDetails.range.chargetrip_range.worst + currentVehicleDetails.range.chargetrip_range.best) * 1000) / 2) ||
+        250000;
 
     function toStep(step: number) {
         setCurrentStep(step);
@@ -69,8 +75,18 @@ export default function Home() {
                                 }}
                             />
                         )}
-                        {currentStep === 2 && currentVehicle && <VehicleDetails vehicle={currentVehicle} />}
-                        {currentStep === 3 && currentVehicle && <MapComponent />}
+                        {currentStep === 2 && currentVehicle && (
+                            <VehicleDetails
+                                vehicle={currentVehicle}
+                                onFetched={(details: VehicleDetailsGQL) => {
+                                    setCurrentVehicleDetails(details);
+                                    toStep(3);
+                                }}
+                            />
+                        )}
+                        {currentStep === 3 && currentVehicleDetails && (
+                            <MapComponent autonomie={vehicleRange} temps_recharge={currentVehicleDetails.routing.fast_charging_support ? 30 : 60} />
+                        )}
                     </div>
                     {currentStep <= 1 && (
                         <Button onClick={() => toStep(2)} className="w-1/2 mx-auto my-4" disabled={currentVehicle === undefined} color="green">
@@ -81,9 +97,6 @@ export default function Home() {
                         <>
                             <Button onClick={() => toStep(1)} className="w-1/2 mx-auto my-1" color="red">
                                 Retour
-                            </Button>
-                            <Button onClick={() => toStep(3)} className="w-1/2 mx-auto my-1" color="green">
-                                Continuer
                             </Button>
                         </>
                     )}

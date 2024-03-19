@@ -33,7 +33,7 @@ export const VehicleList: React.FC<VehicleListProps> = ({ selectedVehicle, onSel
 
     return (
         <div>
-            {loading && <Spinner size={32} />}
+            {loading && <Spinner />}
             {error && (
                 <Alert color="failure" icon={HiInformationCircle}>
                     <span className="font-medium">Query alert!</span> Error while submitting the query.
