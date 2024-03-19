@@ -173,7 +173,7 @@ export const MapComponent: React.FC<MapProps> = ({ autonomie, temps_recharge }) 
             </soapenv:Envelope>`;
 
         try {
-            const response = await fetch(url, {
+            const response = await fetch("/soap", {
                 method: "POST",
                 headers: {
                     "Content-Type": "text/xml; charset=utf-8",
